@@ -1,0 +1,31 @@
+name: Construir ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Liberar espaço em disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android
+          df -h /
+
+      - name: Construir em container Debian trixie
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD":/work -w /work \
+            debian:trixie bash ./build.sh
+
+      - name: Publicar ISO como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso
+          path: out/*
+          if-no-files-found: error
