@@ -1,0 +1,11 @@
+Bem-vindo ao MeuLinux!
+
+Você está no modo live: nada do que fizer aqui é gravado no disco
+(a menos que você salve em um pendrive ou disco externo).
+
+Usuário: live
+Senha:   live
+
+Para personalizar a distro, edite packages.list (pacotes),
+config.env (nome, idioma) e a pasta overlay/ (arquivos extras)
+no projeto e gere a ISO de novo com ./build.sh.
