@@ -1,0 +1,103 @@
+name: Testar ISO no runner
+
+# Pré-requisito: rodar o workflow "Construir ISO" antes (ele gera o artefato "iso").
+# Modo remoto: crie o secret TS_AUTHKEY (chave de autenticação do Tailscale).
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "screenshot = tira fotos da tela | remoto = abre a tela por VNC via Tailscale"
+        type: choice
+        options: [screenshot, remoto]
+        default: screenshot
+      minutos:
+        description: "Duração da sessão remota, em minutos"
+        type: string
+        default: "30"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  testar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Baixar a ISO do último build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download --repo "$GITHUB_REPOSITORY" --name iso --dir iso
+          ls -lh iso
+
+      - name: Instalar QEMU e ferramentas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 socat imagemagick
+
+      - name: Liberar KVM (se existir)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          ls -l /dev/kvm || echo "Sem KVM: a VM vai rodar sem aceleração (bem mais lenta)"
+
+      - name: Conectar ao Tailscale
+        if: inputs.modo == 'remoto'
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          hostname: meulinux-runner
+
+      - name: Iniciar a VM
+        env:
+          MODO: ${{ inputs.modo }}
+        run: |
+          ISO="$(ls iso/*.iso | head -n1)"
+          KVM=""
+          if [ -w /dev/kvm ]; then KVM="-enable-kvm -cpu host"; fi
+          if [ "$MODO" = "remoto" ]; then
+            VNC_ADDR="$(tailscale ip -4 | head -n1)"
+            echo "Conecte um cliente VNC em: ${VNC_ADDR}:5900" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            VNC_ADDR="127.0.0.1"
+          fi
+          nohup qemu-system-x86_64 $KVM -m 4096 -smp 2 \
+            -cdrom "$ISO" -boot d -vga std \
+            -display none -vnc "${VNC_ADDR}:0" \
+            -monitor unix:/tmp/qemu-mon.sock,server,nowait \
+            -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+            > qemu.log 2>&1 &
+          sleep 5
+          tail -n 5 qemu.log || true
+
+      - name: Tirar fotos da tela
+        run: |
+          mkdir -p telas
+          mon() { echo "$1" | socat -t 1 - UNIX-CONNECT:/tmp/qemu-mon.sock > /dev/null; }
+          shot() { mon "screendump /tmp/$1.ppm"; sleep 2; convert "/tmp/$1.ppm" "telas/$1.png"; }
+          sleep 15; mon "sendkey ret"
+          sleep 40; shot tela1
+          sleep 60; shot tela2
+          sleep 90; shot tela3
+          ls -l telas
+
+      - name: Publicar fotos da tela
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telas
+          path: |
+            telas/*.png
+            qemu.log
+          if-no-files-found: warn
+
+      - name: Sessão remota (VNC pelo Tailscale)
+        if: inputs.modo == 'remoto'
+        env:
+          MINUTOS: ${{ inputs.minutos }}
+        run: |
+          echo "Sessão aberta por ${MINUTOS} minutos."
+          sleep $((MINUTOS * 60))
