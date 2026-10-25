@@ -1,0 +1,36 @@
+# Pacotes incluídos na ISO. Um por linha; comentários com #.
+
+# Base
+sudo
+locales
+console-setup
+keyboard-configuration
+bash-completion
+
+# Desktop leve (XFCE)
+xorg
+lightdm
+xfce4
+xfce4-terminal
+xfce4-goodies
+
+# Rede
+network-manager
+network-manager-gnome
+
+# Aplicativos
+firefox-esr
+firefox-esr-l10n-pt-br
+nano
+htop
+curl
+wget
+git
+file-roller
+gparted
+
+# Firmware (Wi-Fi, vídeo e placas comuns)
+firmware-linux
+firmware-misc-nonfree
+firmware-iwlwifi
+firmware-realtek
